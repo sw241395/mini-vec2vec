@@ -47,7 +47,9 @@ class MiniVec2Vec:
                 Default is 30
 
             top_k (int, Optional):
-                TODO: Understand
+                In the relative representation space for embedding in A and B,
+                find the top k nearest neighbors from relative space from B for each A.
+                (A and B share the same representation space)
 
             subsample (float or None, Optional):
                 For each iteration use a percentage subset of the
@@ -121,17 +123,29 @@ class MiniVec2Vec:
             n_jobs=-1,
         ).fit(B)
         for _ in tqdm(range(n_runs), desc="Refinement 1 ...", disable=not verbose):
-            sample_points = A[rng.choice(len(A), size=1000, replace=False)]
+            sample_points = A[
+                rng.choice(
+                    len(A),
+                    size=int(
+                        subsample * len(A)
+                    ),  # Use the same subsample percentage as before
+                    replace=False,
+                )
+            ]
             _, neighbors = nn.kneighbors(normalize(sample_points @ self.W))
             W_new, _ = orthogonal_procrustes(sample_points, B[neighbors].mean(axis=1))
 
             self.W = 0.5 * self.W + 0.5 * W_new
 
         # --- Refinement 2: Cluter-Based Alignment Correction ---
-        kmeans1 = KMeans(n_clusters=500, random_state=rng.random()).fit(A)
+        kmeans1 = KMeans(
+            n_clusters=n_clusters, random_state=rng.integers(1_000_000)
+        ).fit(A)
         centers1 = kmeans1.cluster_centers_
         kmeans2 = KMeans(
-            n_clusters=500, random_state=rng.random(), init=centers1 @ self.W
+            n_clusters=n_clusters,
+            random_state=rng.integers(1_000_000),
+            init=centers1 @ self.W,
         ).fit(B)
         W_new, _ = orthogonal_procrustes(centers1, kmeans2.cluster_centers_)
         self.W = 0.5 * self.W + 0.5 * W_new
@@ -213,7 +227,7 @@ class MiniVec2Vec:
         # Normalize X
         X_mean = X.mean(axis=0)
         X = normalize(X - X_mean)
-        return X @ self.W  # + X_mean
+        return X @ self.W
 
     def fit_transform(
         self,
