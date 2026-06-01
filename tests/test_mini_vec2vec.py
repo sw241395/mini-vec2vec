@@ -54,3 +54,19 @@ class TestMiniVec2Vec:
         assert sum(
             numpy.argmax([x, y]).item() for x, y in zip(cosine_sim1, cosine_sim2)
         ) <= len(A)
+
+    @pytest.mark.parametrize("to_cut", ["A", "B"])
+    def test_different_embedding_dims(self, A, B, to_cut):
+        if to_cut == "A":
+            test_A = A[:, : A.shape[1] // 2]
+            test_B = B
+        elif to_cut == "B":
+            test_A = A
+            test_B = B[:, : B.shape[1] // 2]
+        else:
+            raise ValueError(f"`to_cut` var {to_cut} not valid")
+
+        mv2v = MiniVec2Vec()
+        mv2v.fit(test_A, test_B, n_clusters=3, n_runs=3, top_k=3, verbose=False)
+        # Should have no issue fitting different sized embeddings
+        assert mv2v.W.shape == (A.shape[1], B.shape[1])
