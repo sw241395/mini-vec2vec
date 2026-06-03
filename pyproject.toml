@@ -25,7 +25,7 @@ dev = [
 
 [project.urls]
 Repository = "https://github.com/sw241395/mini-vec2vec"
-Documentation = "TODO"
+Documentation = "https://sw241395.github.io/mini-vec2vec/"
 
 [build-system]
 requires = ["hatchling >= 1.26"]

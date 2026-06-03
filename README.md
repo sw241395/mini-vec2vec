@@ -51,4 +51,3 @@ uv run zensical serve
     * Concatenate rather than vstack
 * Add in original Vec2Vec method
 * Add example for hyper parameter tuning using grid search or bayesian optimization 
-* Rewrite docstring in the [Google Style](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html) to work effectively with mkdocstrings
