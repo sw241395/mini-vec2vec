@@ -29,16 +29,26 @@ uv pip install -e .
 uv run pytest
 ```
 
+### Docs
+
+Docs are created using [zensical](https://github.com/zensical/zensical), to start the docs locally:
+
+```bash
+uv run zensical serve
+```
+
 --- 
 
 ## TODO:
 
-* Docs ([zensical](https://github.com/zensical/zensical))
 * Code Improvements:
     * Make some of the hard coded values variables
 * Performance Improvements:
     * Use float32 numpy arrays
     * Use `from scipy.optimize import linear_sum_assignment` rather than QAP or reduce number of QAP loops
     * `MiniBatchKMeans` instead of `Kmeans`
+        * Could we expand to any clustering algorithm?
     * Concatenate rather than vstack
 * Add in original Vec2Vec method
+* Add example for hyper parameter tuning using grid search or bayesian optimization 
+* Rewrite docstring in the [Google Style](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html) to work effectively with mkdocstrings
