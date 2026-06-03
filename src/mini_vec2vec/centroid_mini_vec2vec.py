@@ -3,16 +3,15 @@ from tqdm.auto import tqdm
 from scipy.linalg import orthogonal_procrustes
 from scipy.optimize import quadratic_assignment
 from sklearn.preprocessing import normalize
-from sklearn.neighbors import NearestNeighbors
 from sklearn.cluster import KMeans
 from .mini_vec2vec_base import MiniVec2VecBase
 
 
-class MiniVec2Vec(MiniVec2VecBase):
+class CentroidMiniVec2Vec(MiniVec2VecBase):
     def __init__(self):
         """
-        Constructor for Mini-Vec2Vec using the relative representation
-        method. (Option 1 in the paper)
+        Constructor for Mini-Vec2Vec using the centroids only
+        method. (Option 2 in the paper)
         """
         self.W = None
 
@@ -125,7 +124,7 @@ class MiniVec2Vec(MiniVec2VecBase):
     ):
         """
         Find an approximate matching between embedding in A and B using
-        relative representations.
+        centroids.
 
         1. Perform k-means clustering in each embedding space independently
            and obtain cluster centroids.
@@ -133,12 +132,10 @@ class MiniVec2Vec(MiniVec2VecBase):
         3. Find the optimal matching between the cluster centroids by solving
            the Quadratic Assignment Problem (QAP), which finds a permutation
            that aligns the similarity matrices optimally.
-        4. Use the aligned centroids as anchors. We represent each embedding
-           through its relationships to anchor points.
-        5. We construct pseudo-parallel pairs by sending each element in space
+        4. We construct pseudo-parallel pairs by sending each element in space
            A to the average of its k nearest neighbors from space B (based on
            similarity in relative space).
-        6. Optimal orthogonal transformation is obtained by Procrustes analysis
+        5. Optimal orthogonal transformation is obtained by Procrustes analysis
 
         Args:
             A (numpy.array):
@@ -216,21 +213,10 @@ class MiniVec2Vec(MiniVec2VecBase):
             A_centers.append(A_clusters)
             B_centers.append(B_clusters[quad.col_ind])
 
-        r_A = A @ numpy.vstack(A_centers).T
-        r_B = B @ numpy.vstack(B_centers).T
-
-        # get top k similar from cosine sim between centers and input data
-        nn = NearestNeighbors(
-            n_neighbors=top_k,
-            metric="cosine",
-            algorithm="brute",
-            n_jobs=-1,
-        ).fit(r_B)
-        _, top_similar = nn.kneighbors(r_A)
-
-        # Pseudo-parallel pairs for A by computing average of the k nearest neighbors in B
-        Y_matched = B[top_similar].swapaxes(-1, -2) @ (numpy.ones(top_k) / top_k)
+        # Run procrustes over the aligned centroids
+        r_A = numpy.vstack(A_centers)
+        r_B = numpy.vstack(B_centers)
 
         # --- Train Mappings ---
-        self.W, _ = orthogonal_procrustes(A, Y_matched)
+        self.W, _ = orthogonal_procrustes(r_A, r_B)
         return self
