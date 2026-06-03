@@ -24,7 +24,7 @@ SENTENCES = [
 ]
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def A():
     embeddings_file_path = Path("./data/A.npy")
     if embeddings_file_path.exists():
@@ -38,7 +38,7 @@ def A():
     return embeddings
 
 
-@pytest.fixture
+@pytest.fixture(scope="function")
 def B():
     embeddings_file_path = Path("./data/B.npy")
     if embeddings_file_path.exists():
