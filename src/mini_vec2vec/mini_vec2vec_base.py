@@ -51,8 +51,9 @@ class MiniVec2VecBase(ABC):
     ):
         """
         Refinement 1: Iterative Closest Point Average
-        Transforming embed-dings from space A to B using W,
-        averaging their nearest neighbors in space B, and
+
+        Transforming embed-dings from space `A` to `B` using `W`,
+        averaging their nearest neighbors in space `B`, and
         obtaining a new orthogonal transformation with
         Procrustes analysis.
 
@@ -69,19 +70,19 @@ class MiniVec2VecBase(ABC):
                 Default is 30
 
             top_k (int, Optional):
-                In the relative representation space for embedding in A and B,
-                find the top k nearest neighbors from relative space from B for each A.
-                (A and B share the same representation space)
+                In the relative representation space for embedding in `A` and `B`,
+                find the top k nearest neighbors from relative space from `B` for each `A`.
+                (`A` and `B` share the same representation space)
 
             subsample (float, Optional):
                 For each iteration of refinement 1, use a subset of embeddings
-                in A. To reduce overhead and reduce overfitting.
+                in `A`. To reduce overhead and reduce overfitting.
                 Default is 0.33
 
             alpha (float, Optional):
                 Smoothing factor when running exponential smoothing
-                for updating the transform matrix W.
-                Must be 0 < alpha < 1.
+                for updating the transform matrix `W`.
+                Must be `0 < alpha < 1`.
                 Default is 0.5
 
             random_seed (int, Optional):
@@ -92,8 +93,9 @@ class MiniVec2VecBase(ABC):
                 If False it will hide all the progress bars
                 Default is True
 
-        Returns: self
-            MiniVec2Vec object after refinement 1 have been applied
+        Returns:
+            self:
+                MiniVec2Vec object after refinement 1 have been applied
         """
         if not 0 < subsample <= 1:
             raise ValueError("`subsample` must be: 0 < `subsample` <= 1")
@@ -137,15 +139,16 @@ class MiniVec2VecBase(ABC):
     ):
         """
         Refinement 2: Cluter-Based Alignment Correction
+
         Improve the large-scale matching between the spaces, by
-        clustering the embeddings in space A. We then apply W to
-        the cluster centroids and cluster the B embeddings, where
+        clustering the embeddings in space `A`. We then apply `W` to
+        the cluster centroids and cluster the `B` embeddings, where
         the clustering algorithm is initialized with the transformed
         A centroids as the initial centroids. The transformed
         clusters should be close to a set of clusters in the new
         space, therefore expect the clustering algorithm to make only
         minor adjustments, correcting biases in the transformation and
-        moving the centroids to their “right positions” in space B.
+        moving the centroids to their “right positions” in space `B`.
 
         Args:
             A (numpy.array):
@@ -160,16 +163,17 @@ class MiniVec2VecBase(ABC):
 
             alpha (float, Optional):
                 Smoothing factor when running exponential smoothing
-                for updating the transform matrix W.
-                Must be 0 < alpha < 1.
+                for updating the transform matrix `W`.
+                Must be `0 < alpha < 1`.
                 Default is 0.5
 
             random_seed (int, Optional):
                 Use a random seed for reproducible results.
                 Default is 123
 
-        Returns: self
-            MiniVec2Vec object after refinement 2 have been applied
+        Returns:
+            self:
+                MiniVec2Vec object after refinement 2 have been applied
         """
         if not 0 < alpha < 1:
             raise ValueError("`alpha` must be: 0 < `alpha` < 1")
@@ -200,8 +204,9 @@ class MiniVec2VecBase(ABC):
             X (numpy.array):
                 Set of embeddings to transform
 
-        Returns: numpy.array
-            Transformed embeddings X
+        Returns:
+            array:
+                Transformed embeddings `X`
 
         """
         self._check_w()
@@ -225,8 +230,8 @@ class MiniVec2VecBase(ABC):
     ):
         """
         Create the optimal matrix `W` of linear transforms for
-        mapping embeddings from embedding space A to embedding
-        space B. Then apply it to the embeddings from A.
+        mapping embeddings from embedding space `A` to embedding
+        space `B`. Then apply it to the embeddings from `A`.
         Same as running `.fit().transform(X)`.
 
         Args:
@@ -246,13 +251,16 @@ class MiniVec2VecBase(ABC):
                 Default is 30
 
             top_k (int, Optional):
-                TODO: Understand
+                In the relative representation space for embedding in `A` and `B`,
+                find the top k nearest neighbors from relative space from `B` for each `A`.
+                (`A` and `B` share the same representation space)
+                Default is 50
 
             subsample (float or None, Optional):
                 For each iteration use a percentage subset of the
                 data to in A and B, to get the centers.
-                Value must be Between 0 and 1.
-                If 1 use all the data.
+                Must be `0 < subsample <= 1`.
+                Set `subsample=1` to use all the data.
                 Default is 0.33
 
             random_seed (int, Optional):
@@ -263,8 +271,9 @@ class MiniVec2VecBase(ABC):
                 If False it will hide all the progress bars
                 Default is True
 
-        Returns: self
-            Fitted MiniVec2Vec object
+        Returns:
+            self:
+                Fitted MiniVec2Vec object
         """
         return self.fit(
             A, B, n_clusters, n_runs, top_k, alpha, subsample, random_seed, verbose
@@ -283,7 +292,7 @@ class MiniVec2VecBase(ABC):
         B: numpy.array,
     ):
         """
-        Preprocess embedding A, B
+        Preprocess embedding `A`, `B`
         1. Check dimensions of embeddings
         2. Take away the mean and normalize such that the embeddings
            center around the unit hyper-sphere.
@@ -297,8 +306,9 @@ class MiniVec2VecBase(ABC):
             B (numpy.array):
                 Embeddings from the embedding space you want to transform to.
 
-        return (numpy.array, numpy.array)
-            Preprocess A and B
+        Returns:
+            (numpy.array, numpy.array):
+                Preprocessed `A` and `B`
         """
         # Check input embeddings dims
         assert A.ndim == 2

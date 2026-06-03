@@ -16,13 +16,16 @@ dependencies = [
 [dependency-groups]
 dev = [
     "ipykernel>=7.2.0",
+    "mkdocstrings-python>=2.0.3",
     "pytest>=9.0.3",
     "sentence-transformers>=5.5.1",
     "torch>=2.12.0",
+    "zensical>=0.0.43",
 ]
 
 [project.urls]
-Homepage = "https://github.com/sw241395/mini-vec2vec"
+Repository = "https://github.com/sw241395/mini-vec2vec"
+Documentation = "TODO"
 
 [build-system]
 requires = ["hatchling >= 1.26"]
