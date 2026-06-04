@@ -2,6 +2,7 @@ import numpy
 import warnings
 from tqdm.auto import tqdm
 from scipy.linalg import orthogonal_procrustes
+from scipy.optimize import quadratic_assignment
 from sklearn.preprocessing import normalize
 from sklearn.neighbors import NearestNeighbors
 from sklearn.cluster import KMeans
@@ -21,6 +22,7 @@ class MiniVec2VecBase(ABC):
         subsample: float,
         random_seed: int,
         verbose: bool,
+        quadratic_assignment_kwargs: dict,
     ):
         raise NotImplementedError()
 
@@ -35,6 +37,7 @@ class MiniVec2VecBase(ABC):
         subsample: float,
         random_seed: int,
         verbose: bool,
+        quadratic_assignment_kwargs: dict,
     ):
         raise NotImplementedError()
 
@@ -105,6 +108,8 @@ class MiniVec2VecBase(ABC):
         # Set up
         self._check_w()
         A, B = self._pre_process_embeddings(A, B)
+        A_subsample_size = int(subsample * len(A))
+
         rng = numpy.random.default_rng(random_seed)
 
         # Fit KNN on B
@@ -118,13 +123,14 @@ class MiniVec2VecBase(ABC):
             sample_points = A[
                 rng.choice(
                     len(A),
-                    size=int(
-                        subsample * len(A)
-                    ),  # Use the same subsample percentage as before
+                    size=A_subsample_size,
                     replace=False,
                 )
             ]
-            _, neighbors = nn.kneighbors(normalize(sample_points @ self.W))
+            neighbors = nn.kneighbors(
+                sample_points @ self.W,
+                return_distance=False,
+            )
             W_new, _ = orthogonal_procrustes(sample_points, B[neighbors].mean(axis=1))
             self.W = (1 - alpha) * self.W + alpha * W_new
         return self
@@ -183,16 +189,22 @@ class MiniVec2VecBase(ABC):
         A, B = self._pre_process_embeddings(A, B)
         rng = numpy.random.default_rng(random_seed)
 
-        kmeans1 = KMeans(
-            n_clusters=n_clusters, random_state=rng.integers(1_000_000)
-        ).fit(A)
-        centers1 = kmeans1.cluster_centers_
-        kmeans2 = KMeans(
-            n_clusters=n_clusters,
-            random_state=rng.integers(1_000_000),
-            init=centers1 @ self.W,
-        ).fit(B)
-        W_new, _ = orthogonal_procrustes(centers1, kmeans2.cluster_centers_)
+        centers1 = (
+            KMeans(n_clusters=n_clusters, random_state=rng.integers(1_000_000))
+            .fit(A)
+            .cluster_centers_
+        )
+        centers2 = (
+            KMeans(
+                n_clusters=n_clusters,
+                random_state=rng.integers(1_000_000),
+                init=centers1 @ self.W,
+            )
+            .fit(B)
+            .cluster_centers_
+        )
+
+        W_new, _ = orthogonal_procrustes(centers1, centers2)
         self.W = (1 - alpha) * self.W + alpha * W_new
         return self
 
@@ -330,3 +342,49 @@ class MiniVec2VecBase(ABC):
             B = numpy.pad(B, ((0, 0), (0, A.shape[1] - B.shape[1])), "constant")
 
         return A, B
+
+    def _align_clusters(
+        self,
+        A_clusters,
+        B_clusters,
+        n_runs,
+        quadratic_assignment_kwargs,
+    ):
+        """
+        Use QPA to find the best permutation between the clusters from `A`
+        and the clusters from `B` using their relative similarity.
+
+        Args:
+            A_clusters (numpy.array):
+                Cluster centroids from `A`
+
+            B_clusters (numpy.array):
+                Cluster centroids from `B`
+
+            n_runs (int):
+                Number of times to run QA to find maximum.
+
+            quadratic_assignment_kwargs (dict, Optional):
+                Args to use in the `from scipy.optimize.quadratic_assignment`
+                during the alignment of clusters.
+                Default is `{'method':"2opt", 'options':{"maximize": True},}`
+
+        Returns: col_ind
+            1-D array:
+                Column indices corresponding to the best permutation found of the nodes of B clusters.
+        """
+        # Compute the relative cosine similarity between all clusters
+        A_clusters = normalize(A_clusters)
+        B_clusters = normalize(B_clusters)
+        kernel_1 = A_clusters @ A_clusters.T
+        kernel_2 = B_clusters @ B_clusters.T
+
+        quad = None
+        # need to re-run the QAP a few times because it's not very good at finding the global optimum (even 2opt)
+        for _ in range(n_runs):
+            new_quad = quadratic_assignment(
+                kernel_1, kernel_2, **quadratic_assignment_kwargs
+            )
+            if quad is None or quad.fun < new_quad.fun:
+                quad = new_quad
+        return quad.col_ind
