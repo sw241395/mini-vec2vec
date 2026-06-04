@@ -1,8 +1,6 @@
 import numpy
 from tqdm.auto import tqdm
 from scipy.linalg import orthogonal_procrustes
-from scipy.optimize import quadratic_assignment
-from sklearn.preprocessing import normalize
 from sklearn.neighbors import NearestNeighbors
 from sklearn.cluster import KMeans
 from .mini_vec2vec_base import MiniVec2VecBase
@@ -27,6 +25,10 @@ class MiniVec2Vec(MiniVec2VecBase):
         subsample: float = 0.33,
         random_seed: int = 123,
         verbose: bool = True,
+        quadratic_assignment_kwargs: dict = {
+            "method": "2opt",
+            "options": {"maximize": True},
+        },
     ):
         """
         Create the optimal matrix `W` of linear transforms for
@@ -88,13 +90,26 @@ class MiniVec2Vec(MiniVec2VecBase):
                 Used in `matching_anchors` and `refinement_1`.
                 Default is True
 
+            quadratic_assignment_kwargs (dict, Optional):
+                Args to use in the `from scipy.optimize.quadratic_assignment`
+                during the alignment of clusters.
+                Default is `{'method':"2opt", 'options':{"maximize": True},}`
+
         Returns:
-            self:
+            self (MiniVec2Vec):
                 Fitted MiniVec2Vec object
         """
         return (
             self.match_anchors(
-                A, B, n_clusters, n_runs, top_k, subsample, random_seed, verbose
+                A,
+                B,
+                n_clusters,
+                n_runs,
+                top_k,
+                subsample,
+                random_seed,
+                verbose,
+                quadratic_assignment_kwargs,
             )
             .refinement_1(
                 A,
@@ -125,6 +140,10 @@ class MiniVec2Vec(MiniVec2VecBase):
         subsample: float = 0.33,
         random_seed: int = 123,
         verbose: bool = True,
+        quadratic_assignment_kwargs: dict = {
+            "method": "2opt",
+            "options": {"maximize": True},
+        },
     ):
         """
         Find an approximate matching between embedding in `A` and `B` using
@@ -180,8 +199,13 @@ class MiniVec2Vec(MiniVec2VecBase):
                 If False it will hide all the progress bars
                 Default is True
 
+            quadratic_assignment_kwargs (dict, Optional):
+                Args to use in the `from scipy.optimize.quadratic_assignment`
+                during the alignment of clusters.
+                Default is `{'method':"2opt", 'options':{"maximize": True},}`
+
         Returns:
-            self:
+            self (MiniVec2Vec):
                 MiniVec2Vec object after match anchors have been applied
         """
         if not 0 < subsample <= 1:
@@ -189,6 +213,8 @@ class MiniVec2Vec(MiniVec2VecBase):
 
         # Set up
         A, B = self._pre_process_embeddings(A, B)
+        A_subsample_size = int(subsample * len(A))
+        B_subsample_size = int(subsample * len(B))
         rng = numpy.random.default_rng(random_seed)
 
         # get centroids
@@ -196,33 +222,34 @@ class MiniVec2Vec(MiniVec2VecBase):
         B_centers = []
         for _ in tqdm(range(n_runs), desc="Matching Anchors ...", disable=not verbose):
             # Use subsample and K-Means
-            A_clusterer = KMeans(n_clusters=n_clusters).fit(
-                A[rng.choice(len(A), size=int(subsample * len(A)), replace=False)]
-            )
-            A_clusters = normalize(A_clusterer.cluster_centers_)
 
-            B_clusterer = KMeans(n_clusters=n_clusters).fit(
-                B[rng.choice(len(B), size=int(subsample * len(B)), replace=False)]
-            )
-            B_clusters = normalize(B_clusterer.cluster_centers_)
-
-            quad = None
-            # need to re-run the QAP a few times because it's not very good at finding the global optimum (even 2opt)
-            for _ in range(n_runs):
-                new_quad = quadratic_assignment(
-                    A_clusters @ A_clusters.T,
-                    B_clusters @ B_clusters.T,
-                    method="2opt",
-                    options={"maximize": True},
+            A_clusters = (
+                KMeans(
+                    n_clusters=n_clusters,
+                    random_state=rng.integers(1_000_000),
                 )
-                if quad is None or quad.fun < new_quad.fun:
-                    quad = new_quad
+                .fit(A[rng.choice(len(A), size=A_subsample_size, replace=False)])
+                .cluster_centers_
+            )
+
+            B_clusters = (
+                KMeans(
+                    n_clusters=n_clusters,
+                    random_state=rng.integers(1_000_000),
+                )
+                .fit(B[rng.choice(len(B), size=B_subsample_size, replace=False)])
+                .cluster_centers_
+            )
+
+            alignment = self._align_clusters(
+                A_clusters,
+                B_clusters,
+                n_runs,
+                quadratic_assignment_kwargs,
+            )
 
             A_centers.append(A_clusters)
-            B_centers.append(B_clusters[quad.col_ind])
-
-        r_A = A @ numpy.vstack(A_centers).T
-        r_B = B @ numpy.vstack(B_centers).T
+            B_centers.append(B_clusters[alignment])
 
         # get top k similar from cosine sim between centers and input data
         nn = NearestNeighbors(
@@ -230,11 +257,14 @@ class MiniVec2Vec(MiniVec2VecBase):
             metric="cosine",
             algorithm="brute",
             n_jobs=-1,
-        ).fit(r_B)
-        _, top_similar = nn.kneighbors(r_A)
+        ).fit(B @ numpy.concatenate(B_centers, axis=0).T)
+        top_similar = nn.kneighbors(
+            A @ numpy.concatenate(A_centers, axis=0).T,
+            return_distance=False,
+        )
 
         # Pseudo-parallel pairs for A by computing average of the k nearest neighbors in B
-        Y_matched = B[top_similar].swapaxes(-1, -2) @ (numpy.ones(top_k) / top_k)
+        Y_matched = B[top_similar].mean(axis=-2)
 
         # --- Train Mappings ---
         self.W, _ = orthogonal_procrustes(A, Y_matched)
